@@ -145,14 +145,23 @@
         const resultMessage = document.getElementById('result-message');
         const bonusLink = document.getElementById('bonus-link');
 
-        // Полный базовый список призов
+        // --- Получение имени бота из URL ---
+        const urlParams = new URLSearchParams(window.location.search);
+        const botUsernameFromUrl = urlParams.get('bot'); // Ищем параметр 'bot'
+        const defaultBotUsername = 'testbot1winbot'; // Бот по умолчанию
+        const botUsername = botUsernameFromUrl || defaultBotUsername;
+        const startParam = '8'; // Новый параметр start для этой рулетки
+        console.log(`Используемый бот: ${botUsername}, startParam: ${startParam}`); // Для отладки
+        // --- Конец получения имени бота ---
+
+
+        // Полный базовый список призов (URL больше не нужен)
         const basePrizes = [
-            // Определяем выигрышные призы и добавляем URL
-            { name: 'X3 ШАНС', url: 'https://t.me/testbot1winbot?start=8' }, // Winner Reel 1
-            { name: '+220% К ДЕПОЗИТУ', url: 'https://t.me/testbot1winbot?start=8' }, // Winner Reel 2
-            // Остальные призы
+            { name: 'X3 ШАНС' }, // Winner Reel 1
+            { name: '+220% К ДЕПОЗИТУ' }, // Winner Reel 2
             { name: 'БОНУСКА ЗА 50.000₽ (-92%)'},
             { name: '+150% К ДЕПОЗИТУ'},
+            { name: 'СТРАХОВКА 75%'},
             { name: 'СИГНАЛЫ НА ИГРЫ'},
             { name: '50FS' },
             { name: '100FS' },
@@ -173,18 +182,21 @@
             { name: 'УДВОЕНИЕ БАЛАНСА' }
         ];
 
-        // Фиксированные выигрышные призы для каждого барабана
-        const winningPrizes = [
-            basePrizes.find(p => p.name === 'X3 ШАНС'),
-            basePrizes.find(p => p.name === '+220% К ДЕПОЗИТУ')
+        // Фиксированные *имена* выигрышных призов для каждого барабана
+        const winningPrizeNames = [
+            'X3 ШАНС',
+            '+220% К ДЕПОЗИТУ'
         ];
 
-        // Проверка, что все выигрышные призы найдены
-        if (winningPrizes.some(p => !p)) {
-            console.error("Критическая ошибка: Один или несколько выигрышных призов ('X3 ШАНС', '+220% К ДЕПОЗИТУ') не найдены в базовом списке призов!");
-            spinButton.disabled = true;
-            spinButton.textContent = "Ошибка конфигурации";
-        }
+        // Проверка наличия выигрышных призов в базовом списке
+        winningPrizeNames.forEach(name => {
+            if (!basePrizes.some(p => p.name === name)) {
+                 console.error(`Критическая ошибка: Выигрышный приз "${name}" не найден в базовом списке!`);
+                 spinButton.disabled = true;
+                 spinButton.textContent = "Ошибка конфигурации";
+            }
+        });
+
 
         const itemHeight = 60;
         const visibleItems = 3;
@@ -193,8 +205,8 @@
         let isSpinning = false;
         let hasSpun = false;
 
-        // Новый ключ для localStorage
-        const localStorageKey = 'doubleReelState';
+        // Ключ для localStorage
+        const localStorageKey = 'doubleReelState_v2'; // Новый ключ на всякий случай
 
         const repetitions = 5;
 
@@ -214,7 +226,6 @@
         // Создаем ДВА разных полных списка призов
         const fullPrizeLists = [[], []];
         const ensureWinningPrizes = (list, prizeName) => {
-             // ... (логика добавления выигрышных призов, если их мало после шаффла)
              const count = list.filter(p => p.name === prizeName).length;
             const needed = repetitions;
             if (count < needed) {
@@ -234,9 +245,9 @@
             fullPrizeLists[0] = fullPrizeLists[0].concat(shuffled1);
             fullPrizeLists[1] = fullPrizeLists[1].concat(shuffled2);
         }
-        // Гарантируем наличие выигрышных призов в соответствующих списках
-        if(winningPrizes[0]) ensureWinningPrizes(fullPrizeLists[0], winningPrizes[0].name);
-        if(winningPrizes[1]) ensureWinningPrizes(fullPrizeLists[1], winningPrizes[1].name);
+        winningPrizeNames.forEach((name, index) => {
+            ensureWinningPrizes(fullPrizeLists[index], name);
+        });
 
 
         // Функция для заполнения ОДНОГО барабана ИЗ ЕГО СПИСКА
@@ -276,19 +287,19 @@
 
          // Функция установки ПОЛОЖЕНИЯ ВЫИГРЫША для ОДНОГО барабана
         function setWinningPosition(reelElement, listIndex) {
-            const targetPrize = winningPrizes[listIndex];
-             if (!targetPrize) {
+            const targetPrizeName = winningPrizeNames[listIndex];
+             if (!targetPrizeName) {
                  console.error(`Ошибка: Не найден выигрышный приз для барабана ${listIndex + 1}.`);
                  reelElement.style.transform = `translateY(${calculateTranslateY(0)}px)`;
                  return;
              }
-            const targetIndex = findMiddlePrizeIndex(targetPrize.name, listIndex);
+            const targetIndex = findMiddlePrizeIndex(targetPrizeName, listIndex);
 
             reelElement.style.transition = 'none';
             if (targetIndex !== -1) {
                 reelElement.style.transform = `translateY(${calculateTranslateY(targetIndex)}px)`;
             } else {
-                 console.warn(`Не удалось найти выигрышный приз '${targetPrize.name}' в середине списка ${listIndex + 1}, используется индекс 0.`);
+                 console.warn(`Не удалось найти выигрышный приз '${targetPrizeName}' в середине списка ${listIndex + 1}, используется индекс 0.`);
                  reelElement.style.transform = `translateY(${calculateTranslateY(0)}px)`;
             }
              setTimeout(() => {
@@ -314,7 +325,7 @@
                  reels.forEach((reelElement, index) => {
                     setWinningPosition(reelElement, index);
                  });
-                 showResult();
+                 showResult(); // Вызываем для установки текста и ДИНАМИЧЕСКОЙ ссылки
                  spinButton.disabled = true;
             } else {
                  reels.forEach((reelElement, index) => {
@@ -371,27 +382,24 @@
         // Функция отображения результата
         function showResult() {
             // Комбинированный текст выигрыша
-            resultMessage.textContent = `Вы выиграли: ${winningPrizes[0]?.name || 'Приз1'} и ${winningPrizes[1]?.name || 'Приз2'}!`;
+            resultMessage.textContent = `Вы выиграли: ${winningPrizeNames[0]} и ${winningPrizeNames[1]}!`;
 
-            // Ссылка одна и та же, берем из первого приза
-            if (winningPrizes[0] && winningPrizes[0].url) {
-                 bonusLink.href = winningPrizes[0].url;
-                 bonusLink.classList.remove('hidden');
-            } else {
-                 console.error("Не найден URL для выигрышных призов");
-                 bonusLink.classList.add('hidden');
-            }
+            // Формируем и устанавливаем ДИНАМИЧЕСКУЮ ссылку
+            const telegramLink = `https://t.me/${botUsername}?start=${startParam}`;
+            bonusLink.href = telegramLink;
+            bonusLink.classList.remove('hidden');
 
             spinButton.disabled = true;
             hasSpun = true;
 
+            // Сохраняем только факт спина
             const stateToSave = { hasSpun: true };
             localStorage.setItem(localStorageKey, JSON.stringify(stateToSave));
         }
 
         // Обработчик клика по кнопке
         spinButton.addEventListener('click', () => {
-            if (winningPrizes.some(p => !p)) {
+            if (winningPrizeNames.some(name => !basePrizes.some(p => p.name === name))) {
                  resultMessage.textContent = 'Ошибка конфигурации призов!';
                  return;
             }
@@ -406,9 +414,9 @@
             let errorOccurred = false;
 
             // Определяем финальные позиции для ДВУХ барабанов
-            winningPrizes.forEach((prize, index) => {
+            winningPrizeNames.forEach((prizeName, index) => {
                 if (errorOccurred) return;
-                const targetIndex = findMiddlePrizeIndex(prize.name, index);
+                const targetIndex = findMiddlePrizeIndex(prizeName, index);
                 if (targetIndex === -1) {
                     errorOccurred = true; return;
                 }
@@ -441,7 +449,7 @@
             // Показываем результат после завершения анимации второго барабана
             setTimeout(() => {
                 isSpinning = false;
-                showResult();
+                showResult(); // Вызываем для установки текста и ДИНАМИЧЕСКОЙ ссылки
                 spinButton.disabled = true;
             }, 5000 + 50); // Общее время анимации + макс. задержка
         });
